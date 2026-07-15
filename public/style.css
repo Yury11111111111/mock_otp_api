@@ -1,0 +1,266 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: #0f1117;
+  color: #e6e6e6;
+}
+a { color: #6fb4ff; }
+code {
+  background: #0f1117;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #6fb4ff;
+  font-size: 0.9em;
+}
+pre {
+  background: #0f1117;
+  padding: 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+ul { padding-left: 20px; }
+li { margin-bottom: 8px; }
+
+.loading-screen {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+}
+
+/* ---- Welcome / login screen ---- */
+.welcome {
+  min-height: 100vh;
+  padding: 32px 24px;
+}
+.welcome-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr;
+  gap: 32px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .welcome-grid { grid-template-columns: 1fr; }
+}
+.welcome-instructions h1 { margin-top: 0; font-size: 26px; }
+.welcome-instructions h3 { color: #9fb8ff; margin-top: 28px; }
+.welcome-instructions .lead { color: #cfd3dc; font-size: 15px; line-height: 1.5; }
+.welcome-instructions p { line-height: 1.55; color: #ccc; }
+
+.badge {
+  font-size: 12px;
+  background: #4f7cff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.login-box {
+  background: #1a1d27;
+  padding: 28px;
+  border-radius: 12px;
+  position: sticky;
+  top: 24px;
+}
+.login-box h2 { margin-top: 0; font-size: 18px; }
+.login-box label { display: block; margin-top: 14px; margin-bottom: 4px; font-size: 13px; color: #aaa; }
+.login-box input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #0f1117;
+  color: #fff;
+}
+.login-box button {
+  width: 100%;
+  margin-top: 18px;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
+  background: #4f7cff;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+.login-box button:disabled { opacity: 0.6; cursor: default; }
+.login-box .hint { font-size: 12px; color: #888; margin-top: 12px; }
+.error { color: #ff6b6b; margin-top: 10px; font-size: 13px; }
+
+/* ---- Dashboard shell ---- */
+header {
+  background: #1a1d27;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+header h1 { margin: 0; font-size: 20px; }
+.user-box { display: flex; align-items: center; gap: 10px; }
+.username { color: #cfd3dc; font-size: 14px; }
+
+nav { display: flex; gap: 8px; padding: 16px 24px 0; max-width: 1100px; margin: 0 auto; }
+.tab-btn {
+  background: transparent;
+  border: 1px solid #333;
+  color: #ccc;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.tab-btn.active { background: #4f7cff; color: #fff; border-color: #4f7cff; }
+
+button.ghost {
+  background: transparent;
+  border: 1px solid #333;
+  color: #ccc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.token-panel {
+  max-width: 1100px;
+  margin: 12px auto 0;
+  padding: 16px 24px;
+  background: #1a1d27;
+  border-radius: 10px;
+}
+.token-panel textarea {
+  width: 100%;
+  min-height: 70px;
+  margin: 10px 0;
+  background: #0f1117;
+  color: #6fb4ff;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  resize: vertical;
+}
+.token-panel button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #4f7cff;
+  color: #fff;
+  cursor: pointer;
+}
+
+main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+section h2 { margin-top: 0; }
+
+.card {
+  background: #1a1d27;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+.card label { display: block; margin-top: 12px; margin-bottom: 4px; font-size: 13px; color: #aaa; }
+.card input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #0f1117;
+  color: #fff;
+}
+.row { display: flex; gap: 16px; }
+.row > div { flex: 1; }
+.hint { font-size: 12px; color: #888; }
+
+button {
+  cursor: pointer;
+}
+section > button, .card > button {
+  margin-top: 16px;
+  margin-right: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #4f7cff;
+  color: #fff;
+  font-weight: 600;
+}
+.save-status { margin-left: 12px; font-size: 13px; color: #6fdc8c; }
+
+.apps-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  background: #1a1d27;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.apps-table th, .apps-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #262a36;
+  font-size: 13px;
+}
+.apps-table th { color: #888; font-weight: 600; }
+.apps-table .url-cell { max-width: 280px; overflow-wrap: anywhere; }
+.apps-table .actions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.apps-table select, .apps-table button.small {
+  padding: 5px 8px;
+  border-radius: 4px;
+  border: 1px solid #333;
+  background: #0f1117;
+  color: #fff;
+  font-size: 12px;
+}
+.apps-table button.small.danger { border-color: #ff6b6b; color: #ff6b6b; }
+
+/* ---- Modal ---- */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.modal-box {
+  background: #1a1d27;
+  padding: 24px;
+  border-radius: 10px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.modal-box h3 { margin-top: 0; }
+.modal-box h4 { color: #9fb8ff; margin-top: 20px; margin-bottom: 6px; }
+.modal-box input {
+  width: 100%;
+  padding: 8px;
+  margin: 6px 0 4px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #0f1117;
+  color: #fff;
+}
+.modal-box label { font-size: 13px; color: #aaa; display: block; margin-top: 10px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+.modal-actions button {
+  padding: 9px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #4f7cff;
+  color: #fff;
+  font-weight: 600;
+}
+.modal-actions button.ghost { background: transparent; border: 1px solid #333; color: #ccc; font-weight: 400; }
+.modal-box > button { margin-top: 16px; padding: 8px 14px; border-radius: 6px; border: 1px solid #333; background: transparent; color: #ccc; }

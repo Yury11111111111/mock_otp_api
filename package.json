@@ -1,0 +1,18 @@
+{
+  "name": "mock-otp-bank",
+  "version": "1.0.0",
+  "description": "Mock server for OTP Bank POS/BNPL API + webhooks (for integration testing)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1"
+  }
+}
