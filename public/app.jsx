@@ -52,33 +52,79 @@ const BNPL_STATUSES = [
 const AUTH_KEY = "mockOtp.auth";
 const TOKEN_URL = "/keycloak/auth/realms/PPU/protocol/openid-connect/token";
 
+const DEBUG = true;
+
+const Logger = {
+  info: (message, ...optional) => {
+    if (DEBUG) console.log(`[INFO] ${message}`, ...optional);
+  },
+  warn: (message, ...optional) => {
+    if (DEBUG) console.warn(`[WARN] ${message}`, ...optional);
+  },
+  error: (message, ...optional) => {
+    if (DEBUG) console.error(`[ERROR] ${message}`, ...optional);
+  },
+};
+
 function loadAuth() {
   try {
-    return JSON.parse(localStorage.getItem(AUTH_KEY) || "null");
+    const raw = localStorage.getItem(AUTH_KEY);
+    const auth = raw ? JSON.parse(raw) : null;
+    Logger.info(
+      "loadAuth: успешно загружены данные",
+      auth ? auth.username : "нет данных",
+    );
+    return auth;
   } catch (e) {
+    Logger.error("loadAuth: ошибка парсинга", e);
     return null;
   }
 }
+
 function saveAuth(auth) {
-  localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+  try {
+    localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+    Logger.info("saveAuth: сохранены данные для", auth.username);
+  } catch (e) {
+    Logger.error("saveAuth: ошибка сохранения", e);
+  }
 }
+
 function clearAuth() {
   localStorage.removeItem(AUTH_KEY);
+  Logger.info("clearAuth: данные удалены");
 }
 
 async function requestToken(params) {
   const body = new URLSearchParams({ client_id: "poc", ...params });
-  const r = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
+  Logger.info("requestToken: отправка запроса", {
+    grant_type: params.grant_type,
+    username: params.username || "(refresh)",
   });
-  const data = await r.json();
-  if (!r.ok)
-    throw new Error(
-      data.error_description || data.error || "Ошибка авторизации",
-    );
-  return data;
+  try {
+    const tokenRequest = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    const data = await tokenRequest.json();
+    if (!tokenRequest.ok) {
+      const errMsg =
+        data.error_description || data.error || "Ошибка авторизации";
+      Logger.warn("requestToken: ответ с ошибкой", {
+        status: tokenRequest.status,
+        message: errMsg,
+      });
+      throw new Error(errMsg);
+    }
+    Logger.info("requestToken: токен получен", {
+      username: params.username || "(refresh)",
+    });
+    return data;
+  } catch (e) {
+    Logger.error("requestToken: ошибка", e);
+    throw e;
+  }
 }
 
 function tokensToAuth(username, tokens) {
@@ -97,47 +143,44 @@ function App() {
 
   useEffect(() => {
     (async () => {
-      if (!auth) {
+      if (!auth || Date.now() < auth.expiresAt - 5000) {
+        Logger.info("App: проверка токена — валидный, пропускаем обновление");
         setChecking(false);
         return;
       }
-      if (Date.now() < auth.expiresAt - 5000) {
-        setChecking(false);
-        return;
-      }
+      Logger.info("App: попытка обновления токена по refresh_token");
       try {
         const tokens = await requestToken({
           grant_type: "refresh_token",
           refresh_token: auth.refreshToken,
         });
-        const next = tokensToAuth(auth.username, tokens);
-        saveAuth(next);
-        setAuth(next);
+        login(auth.username, tokens);
+        Logger.info("App: токен успешно обновлён");
       } catch (e) {
-        clearAuth();
-        setAuth(null);
+        Logger.warn("App: обновление токена не удалось, выход", e);
+        logout();
       } finally {
         setChecking(false);
       }
     })();
-  }, []); // eslint-disable-line
+  }, []);
 
-  const handleLogin = (username, tokens) => {
+  const login = (username, tokens) => {
     const next = tokensToAuth(username, tokens);
     saveAuth(next);
     setAuth(next);
+    Logger.info("login: пользователь вошёл", username);
   };
 
-  const handleLogout = () => {
+  const logout = () => {
     clearAuth();
     setAuth(null);
+    Logger.info("logout: пользователь вышел");
   };
 
   if (checking) return <div className="loading-screen">Загрузка…</div>;
-  if (!auth) return <Welcome onLogin={handleLogin} />;
-  return (
-    <Dashboard auth={auth} onLogout={handleLogout} onAuthUpdate={setAuth} />
-  );
+  if (!auth) return <Welcome onLogin={login} />;
+  return <Dashboard auth={auth} onLogout={logout} onAuthUpdate={setAuth} />;
 }
 
 // ---------- Экран входа + инструкция ----------
@@ -147,14 +190,16 @@ function Welcome({ onLogin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submit = async (e) => {
+  const submitLogin = async (e) => {
     e.preventDefault();
     if (!username.trim() || !password) {
       setError("Заполните логин и пароль");
+      Logger.warn("submitLogin: попытка входа с пустыми полями");
       return;
     }
     setLoading(true);
     setError("");
+    Logger.info("submitLogin: попытка входа", { username: username.trim() });
     try {
       const tokens = await requestToken({
         grant_type: "password",
@@ -162,8 +207,10 @@ function Welcome({ onLogin }) {
         password,
       });
       onLogin(username.trim(), tokens);
+      Logger.info("submitLogin: вход выполнен успешно");
     } catch (err) {
       setError(err.message);
+      Logger.error("submitLogin: ошибка входа", err);
     } finally {
       setLoading(false);
     }
@@ -179,23 +226,23 @@ function Welcome({ onLogin }) {
           <p className="lead">
             Тестовый сервер, который эмулирует API и вебхуки ОТП Банка
             (POS-кредитование «Смарт-анкета» и BNPL «Давай делить») для отладки
-            обработки заявок на вашей стороне. Все данные моковые, в реальный
-            банк ничего не уходит.
+            обработки заявок на вашей стороне. Все данные моковые и нужны только
+            для тестирования, в реальный банк ничего не уходит.
           </p>
 
           <h3>1. Как войти</h3>
           <p>
-            Отдельного реестра аккаунтов нет — как и в реальном банке,
-            «техническую учётку» вы получаете сами: введите любой логин и пароль
-            справа. Если такого логина ещё не было — он будет создан
-            автоматически с этим паролем. Если логин уже существует — пароль
-            должен совпадать с тем, что вы задали при первом входе.
+            Отдельного реестра аккаунтов в этом серсе нет, «техническую учётку»
+            вы создаёте сами: введите любой логин и пароль справа. Если такого
+            логина ещё не было — он будет создан автоматически с этим паролем.
+            Если логин уже существует — пароль должен совпадать с тем, что вы
+            задали при первом входе.
           </p>
           <p>
             Токен, который вы получите, привязан именно к этому логину: заявки,
             созданные под одним логином, не видны под другим. Так несколько
-            человек могут одновременно тестировать интеграцию на одном сервере,
-            не мешая друг другу.
+            человек могут одновременно тестировать запросы на одном сервере, не
+            мешая друг другу.
           </p>
 
           <h3>2. Как использовать в Insomnia / Postman</h3>
@@ -218,36 +265,8 @@ grant_type=password&client_id=poc&username=ВАШ_ЛОГИН&password=ВАШ_П�
           <h3>3. Как проверить приём вебхуков</h3>
           <p>
             Мок сам отправляет POST-запросы на URL, который вы укажете в
-            настройках — отдельно для POS и для BNPL. Чтобы это проверить:
+            настройках — отдельно для POS и для BNPL.
           </p>
-          <ul>
-            <li>
-              <b>Быстрый ручной просмотр без кода:</b> создайте временный URL на
-              <a href="https://webhook.site" target="_blank" rel="noreferrer">
-                {" "}
-                webhook.site
-              </a>{" "}
-              и вставьте его в настройки — все входящие запросы будут видны
-              прямо в браузере. Подходит, чтобы один раз посмотреть на структуру
-              payload.
-            </li>
-            <li>
-              <b>Проверка вашего реального обработчика на localhost:</b>{" "}
-              поднимите свой эндпоинт локально и пробросьте его наружу через{" "}
-              <a href="https://ngrok.com" target="_blank" rel="noreferrer">
-                ngrok
-              </a>{" "}
-              (или Cloudflare Tunnel) — команда вида{" "}
-              <code>ngrok http 4000</code> даст публичный https-адрес, который
-              форвардит запросы на ваш localhost:4000. Его и укажите в
-              настройках как webhook URL.
-            </li>
-            <li>
-              <b>Проверка задеплоенного обработчика:</b> просто укажите его
-              боевой/тестовый публичный URL в настройках — ничего дополнительно
-              поднимать не нужно.
-            </li>
-          </ul>
           <p>
             Ваш обработчик обязан отвечать <code>HTTP 200</code> — иначе (как и
             настоящий банк) мок повторит отправку столько раз, сколько задано в
@@ -256,13 +275,12 @@ grant_type=password&client_id=poc&username=ВАШ_ЛОГИН&password=ВАШ_П�
           </p>
           <p>
             После входа: создайте моковую заявку (POS или BNPL), выберите нужный
-            статус в выпадающем списке и нажмите «Сменить статус + вебхук» —
-            запрос уйдёт немедленно, без ожидания реальных сроков обработки
-            банком.
+            статус в выпадающем списке — запрос уйдёт немедленно, без ожидания
+            реальных сроков обработки банком.
           </p>
         </div>
 
-        <form className="login-box" onSubmit={submit}>
+        <form className="login-box" onSubmit={submitLogin}>
           <h2>Вход / создание тестового аккаунта</h2>
           <label>Логин</label>
           <input
@@ -298,26 +316,37 @@ function Dashboard({ auth, onLogout, onAuthUpdate }) {
 
   const api = useCallback(
     (path, options = {}) => {
-      return fetch(`/admin/api${path}`, {
+      const url = `/admin/api${path}`;
+      Logger.info("api: запрос", { method: options.method || "GET", url });
+      return fetch(url, {
         ...options,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${auth.accessToken}`,
           ...(options.headers || {}),
         },
-      }).then(async (r) => {
-        if (r.status === 401) {
-          onLogout();
-          throw new Error("unauthorized");
-        }
-        return r.json();
-      });
+      })
+        .then(async (result) => {
+          if (result.status === 401) {
+            Logger.warn("api: получен 401, выполняем выход");
+            onLogout();
+            throw new Error("unauthorized");
+          }
+          const data = await result.json();
+          Logger.info("api: ответ", { status: result.status, url });
+          return data;
+        })
+        .catch((err) => {
+          Logger.error("api: ошибка", err);
+          throw err;
+        });
     },
     [auth.accessToken, onLogout],
   );
 
   const copyToken = () => {
     navigator.clipboard.writeText(auth.accessToken);
+    Logger.info("copyToken: токен скопирован в буфер обмена");
   };
 
   const minutesLeft = Math.max(
@@ -389,109 +418,7 @@ function Dashboard({ auth, onLogout, onAuthUpdate }) {
   );
 }
 
-// ---------- Настройки ----------
-function SettingsTab({ api }) {
-  const [settings, setSettings] = useState(null);
-  const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    api("/settings").then(setSettings);
-  }, [api]);
-
-  if (!settings) return <p>Загрузка…</p>;
-
-  const set = (key) => (e) =>
-    setSettings({ ...settings, [key]: e.target.value });
-  const setNum = (key) => (e) =>
-    setSettings({ ...settings, [key]: Number(e.target.value) || 0 });
-
-  const save = async () => {
-    await api("/settings", { method: "PUT", body: JSON.stringify(settings) });
-    setStatus("Сохранено ✓");
-    setTimeout(() => setStatus(""), 2000);
-  };
-
-  const base = window.location.origin;
-
-  return (
-    <section>
-      <h2>Настройки вебхуков (только для вашего аккаунта)</h2>
-      <div className="card">
-        <label>URL для вебхуков POS (Смарт-анкета)</label>
-        <input
-          value={settings.posWebhookUrl}
-          onChange={set("posWebhookUrl")}
-          placeholder="https://ваш-сервис.ru/webhooks/pos"
-        />
-
-        <label>URL для вебхуков BNPL (Давай делить)</label>
-        <input
-          value={settings.bnplWebhookUrl}
-          onChange={set("bnplWebhookUrl")}
-          placeholder="https://ваш-сервис.ru/webhooks/bnpl"
-        />
-
-        <div className="row">
-          <div>
-            <label>Кол-во повторов при ошибке</label>
-            <input
-              type="number"
-              min="0"
-              value={settings.maxRetries}
-              onChange={setNum("maxRetries")}
-            />
-          </div>
-          <div>
-            <label>Задержка между повторами (сек)</label>
-            <input
-              type="number"
-              min="0"
-              value={settings.retryDelaySeconds}
-              onChange={setNum("retryDelaySeconds")}
-            />
-          </div>
-        </div>
-
-        <button onClick={save}>Сохранить настройки</button>
-        <span className="save-status">{status}</span>
-      </div>
-
-      <div className="card">
-        <h3>
-          Адреса мок-сервера (вписать в вашу систему вместо реальных URL банка)
-        </h3>
-        <p>
-          <b>Авторизация</b> (вместо poslogin.otpbank.ru):
-        </p>
-        <pre>
-          POST {base}/keycloak/auth/realms/PPU/protocol/openid-connect/token
-        </pre>
-        <p>
-          <b>POS API</b> (вместо ecom.otpbank.ru/broker/core):
-        </p>
-        <pre>{`GET ${base}/broker/core/api/v1/states
-GET ${base}/broker/core/api/v1/states/{uuid}
-GET ${base}/broker/core/api/v1/states/{uuid}/opty
-GET ${base}/broker/core/api/v1/states/{uuid}/audit`}</pre>
-        <p>
-          <b>BNPL API</b> (вместо davay-delit.ru):
-        </p>
-        <pre>{`POST ${base}/pos-bnpl-partner-api/api/v1/applications
-GET  ${base}/pos-bnpl-partner-api/api/v1/point/{pointCode}/credit-products
-POST ${base}/pos-bnpl-partner-api/api/v1/applications/cancel
-POST ${base}/pos-bnpl-partner-api/api/v1/applications/commit
-POST ${base}/pos-bnpl-partner-api/api/v1/applications/refund`}</pre>
-        <p className="hint">
-          Все эти запросы требуют заголовок{" "}
-          <code>Authorization: Bearer &lt;ваш access_token&gt;</code> — получить
-          его можно на экране входа или напрямую через /token (см. инструкцию
-          там). Вебхуки сервер отправляет сам на URL выше — их не нужно никуда
-          вписывать, только принять у себя.
-        </p>
-      </div>
-    </section>
-  );
-}
 
 // ---------- Заявки ----------
 function ApplicationsTab({ api, product, statuses }) {
@@ -501,7 +428,12 @@ function ApplicationsTab({ api, product, statuses }) {
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(() => {
-    api(`/applications?product=${product}`).then(setItems);
+    Logger.info(`ApplicationsTab (${product}): загрузка списка`);
+    api(`/applications?product=${product}`)
+      .then(setItems)
+      .catch((err) =>
+        Logger.error(`ApplicationsTab (${product}): ошибка загрузки`, err),
+      );
   }, [api, product]);
 
   useEffect(() => {
@@ -509,44 +441,80 @@ function ApplicationsTab({ api, product, statuses }) {
   }, [load]);
 
   const create = async () => {
-    const app = await api("/applications", {
-      method: "POST",
-      body: JSON.stringify({ product, overrides: {} }),
-    });
-    load();
-    setModal({ title: "Заявка создана", json: app });
+    Logger.info(`ApplicationsTab (${product}): создание новой заявки`);
+    try {
+      const app = await api("/applications", {
+        method: "POST",
+        body: JSON.stringify({ product, overrides: {} }),
+      });
+      Logger.info(`ApplicationsTab (${product}): заявка создана`, app);
+      load();
+      setModal({ title: "Заявка создана", json: app });
+    } catch (err) {
+      Logger.error(`ApplicationsTab (${product}): ошибка создания`, err);
+    }
   };
 
   const remove = async (id) => {
     if (!confirm("Удалить заявку?")) return;
-    await api(`/applications/${id}`, { method: "DELETE" });
-    load();
+    Logger.info(`ApplicationsTab (${product}): удаление заявки ${id}`);
+    try {
+      await api(`/applications/${id}`, { method: "DELETE" });
+      Logger.info(`ApplicationsTab (${product}): заявка ${id} удалена`);
+      load();
+    } catch (err) {
+      Logger.error(`ApplicationsTab (${product}): ошибка удаления ${id}`, err);
+    }
   };
 
   const transition = async (id, status) => {
     setBusyId(id);
+    Logger.info(
+      `ApplicationsTab (${product}): смена статуса заявки ${id} -> ${status}`,
+    );
     try {
       const result = await api(`/applications/${id}/transition`, {
         method: "POST",
         body: JSON.stringify({ status }),
       });
+      Logger.info(
+        `ApplicationsTab (${product}): статус изменён, результат вебхука`,
+        result,
+      );
       setModal({
         title: "Результат отправки вебхука",
         json: result.webhookResult,
       });
       load();
+    } catch (err) {
+      Logger.error(
+        `ApplicationsTab (${product}): ошибка смены статуса ${id}`,
+        err,
+      );
     } finally {
       setBusyId(null);
     }
   };
 
   const saveEdit = async (id, patch) => {
-    await api(`/applications/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(patch),
-    });
-    setEditing(null);
-    load();
+    Logger.info(
+      `ApplicationsTab (${product}): сохранение редактирования заявки ${id}`,
+      patch,
+    );
+    try {
+      await api(`/applications/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(patch),
+      });
+      Logger.info(`ApplicationsTab (${product}): заявка ${id} обновлена`);
+      setEditing(null);
+      load();
+    } catch (err) {
+      Logger.error(
+        `ApplicationsTab (${product}): ошибка обновления ${id}`,
+        err,
+      );
+    }
   };
 
   return (
@@ -610,7 +578,10 @@ function ApplicationsTab({ api, product, statuses }) {
         <JsonModal
           title={modal.title}
           json={modal.json}
-          onClose={() => setModal(null)}
+          onClose={() => {
+            setModal(null);
+            transition();
+          }}
         />
       )}
     </section>
@@ -641,8 +612,9 @@ function AppRow({
         <select
           value={status}
           onChange={(e) => {
-            setStatus(e.target.value);
-            onTransition(status);
+            const newStatus = e.target.value;
+            setStatus(newStatus);
+            onTransition(newStatus);
           }}
         >
           {statuses.map((s) => (
@@ -713,6 +685,7 @@ function EditAppModal({ app, product, onClose, onSave }) {
     });
 
   const submit = () => {
+    Logger.info("EditAppModal: сохранение изменений", { product, form });
     if (isPos) {
       onSave({
         clientFio: form.clientFio,
@@ -900,15 +873,24 @@ function LogsTab({ api }) {
   const [modal, setModal] = useState(null);
 
   const load = useCallback(() => {
-    api("/logs").then(setLogs);
+    Logger.info("LogsTab: загрузка логов");
+    api("/logs")
+      .then(setLogs)
+      .catch((err) => Logger.error("LogsTab: ошибка загрузки логов", err));
   }, [api]);
   useEffect(() => {
     load();
   }, [load]);
 
   const clear = async () => {
-    await api("/logs", { method: "DELETE" });
-    load();
+    Logger.info("LogsTab: очистка логов");
+    try {
+      await api("/logs", { method: "DELETE" });
+      Logger.info("LogsTab: логи очищены");
+      load();
+    } catch (err) {
+      Logger.error("LogsTab: ошибка очистки логов", err);
+    }
   };
 
   return (
