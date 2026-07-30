@@ -100,6 +100,7 @@ async function requestToken(params) {
   Logger.info("requestToken: отправка запроса", {
     grant_type: params.grant_type,
     username: params.username || "(refresh)",
+    params
   });
   try {
     const tokenRequest = await fetch(TOKEN_URL, {
@@ -418,7 +419,121 @@ function Dashboard({ auth, onLogout, onAuthUpdate }) {
   );
 }
 
+// ---------- Настройки ----------
+function SettingsTab({ api }) {
+  const [settings, setSettings] = useState(null);
+  const [status, setStatus] = useState("");
 
+  useEffect(() => {
+    Logger.info("SettingsTab: загрузка настроек");
+    api("/settings")
+      .then(setSettings)
+      .catch((err) => Logger.error("SettingsTab: ошибка загрузки", err));
+  }, [api]);
+
+  if (!settings) return <p>Загрузка…</p>;
+
+  const set =
+    (key, { isNumber = false, maxValue = Infinity } = {}) =>
+    (e) => {
+      const raw = e.target.value;
+      const value = isNumber ? Math.min(Number(raw), maxValue) || 0 : raw;
+      setSettings({ ...settings, [key]: value });
+    };
+
+  const save = async () => {
+    Logger.info("SettingsTab: сохранение настроек", settings);
+    try {
+      await api("/settings", { method: "PUT", body: JSON.stringify(settings) });
+      setStatus("Сохранено ✓");
+      Logger.info("SettingsTab: настройки сохранены");
+      setTimeout(() => setStatus(""), 2000);
+    } catch (err) {
+      Logger.error("SettingsTab: ошибка сохранения", err);
+      setStatus("Ошибка сохранения");
+    }
+  };
+
+  const base = window.location.origin;
+
+  return (
+    <section>
+      <h2>Настройки вебхуков (только для вашего аккаунта)</h2>
+      <div className="card">
+        <label>URL для вебхуков POS (Смарт-анкета)</label>
+        <input
+          value={settings.posWebhookUrl}
+          onChange={set("posWebhookUrl")}
+          placeholder="https://ваш-сервис.ru/webhooks/pos"
+        />
+
+        <label>URL для вебхуков BNPL (Давай делить)</label>
+        <input
+          value={settings.bnplWebhookUrl}
+          onChange={set("bnplWebhookUrl")}
+          placeholder="https://ваш-сервис.ru/webhooks/bnpl"
+        />
+
+        <div className="row">
+          <div>
+            <label>Кол-во повторов при ошибке</label>
+            <input
+              type="number"
+              min="0"
+              value={settings.maxRetries}
+              onChange={set("maxRetries", { isNumber: true, maxValue: 10 })}
+            />
+          </div>
+          <div>
+            <label>Задержка между повторами (сек)</label>
+            <input
+              type="number"
+              min="0"
+              value={settings.retryDelaySeconds}
+              onChange={set("retryDelaySeconds", {
+                isNumber: true,
+                maxValue: 60,
+              })}
+            />
+          </div>
+        </div>
+
+        <button onClick={save}>Сохранить настройки</button>
+        <span className="save-status">{status}</span>
+      </div>
+
+      <div className="card">
+        <h3>
+          Адреса мок-сервера (вписать в вашу систему вместо реальных URL банка)
+        </h3>
+        <p>
+          <b>Авторизация</b> (вместо poslogin.otpbank.ru):
+        </p>
+        <pre>
+          POST {base}/keycloak/auth/realms/PPU/protocol/openid-connect/token
+        </pre>
+        <p>
+          <b>POS API</b> (вместо ecom.otpbank.ru/broker/core):
+        </p>
+        <pre>{`GET ${base}/broker/core/api/v1/states
+GET ${base}/broker/core/api/v1/states/{uuid}
+GET ${base}/broker/core/api/v1/states/{uuid}/opty
+GET ${base}/broker/core/api/v1/states/{uuid}/audit`}</pre>
+        <p>
+          <b>BNPL API</b> (вместо davay-delit.ru):
+        </p>
+        <pre>{`POST ${base}/pos-bnpl-partner-api/api/v1/applications`}</pre>
+        <p className="hint">
+          Все эти запросы требуют заголовок{" "}
+          <code>Authorization: Bearer &lt;ваш access_token&gt;</code> —
+          получитFь его можно на экране входа или напрямую через /token (см.
+          инструкцию там). Вебхуки сервер отправляет сам на URL выше — их не
+          нужно никуда вписывать, только принять у себя.
+        </p>
+      </div>
+    </section>
+  );
+}
 
 // ---------- Заявки ----------
 function ApplicationsTab({ api, product, statuses }) {
@@ -580,7 +695,6 @@ function ApplicationsTab({ api, product, statuses }) {
           json={modal.json}
           onClose={() => {
             setModal(null);
-            transition();
           }}
         />
       )}

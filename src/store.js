@@ -7,8 +7,8 @@ const DB_PATH = path.join(__dirname, '..', 'data', 'db.json');
 const DEFAULT_SETTINGS = {
   posWebhookUrl: '',
   bnplWebhookUrl: '',
-  maxRetries: 3,
-  retryDelaySeconds: 5
+  maxRetries: 10,
+  retryDelaySeconds: 60
 };
 
 function defaultDB() {

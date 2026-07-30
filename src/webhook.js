@@ -47,7 +47,7 @@ function buildBnplPayload(app, status) {
 }
 
 async function sendWebhook(product, owner, url, payload, retrySettings) {
-  const { maxRetries = 3, retryDelaySeconds = 5 } = retrySettings || {};
+  const { maxRetries = 10, retryDelaySeconds = 60 } = retrySettings || {};
   let attempt = 0;
   let lastError = null;
   let lastStatus = null;
